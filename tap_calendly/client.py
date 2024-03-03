@@ -7,6 +7,8 @@ import requests
 from singer_sdk.helpers.jsonpath import extract_jsonpath
 from singer_sdk.streams import RESTStream
 
+import logging
+
 from tap_calendly.auth import CalendlyAuthenticator
 
 SCHEMAS_DIR = Path(__file__).parent / Path("./schemas")
@@ -18,7 +20,7 @@ class CalendlyStream(RESTStream):
     url_base = "https://api.calendly.com"
 
     records_jsonpath = "$.collection[*]"  # Or override `parse_response`.
-    next_page_token_jsonpath = "$.pagination.next_page"  # Or override `get_next_page_token`.
+    next_page_token_jsonpath = "$.pagination.next_page_token"  # Or override `get_next_page_token`.
 
     def __init__(self, tap):
         super().__init__(tap)
@@ -48,6 +50,9 @@ class CalendlyStream(RESTStream):
     def get_next_page_token(
             self, response: requests.Response, previous_token: Optional[Any]
     ) -> Optional[Any]:
+        # print the response as text
+        logging.info(response.json())
+
         """Return a token for identifying next page or None if no more pages."""
         if self.next_page_token_jsonpath:
             all_matches = extract_jsonpath(
@@ -55,9 +60,11 @@ class CalendlyStream(RESTStream):
             )
             first_match = next(iter(all_matches), None)
             if first_match:
-                parsed = urlparse(first_match)
-                qs = parse_qs(parsed.query)
-                next_page_token = qs['page_token'][0]
+                next_page_token = first_match
+            #     parsed = urlparse(first_match)
+            #     qs = parse_qs(parsed.query)
+            #     next_page_token = qs['page_token'][0]
+                logging.info('next_page_token: ' + next_page_token)
             else:
                 next_page_token = None
         else:
@@ -80,6 +87,9 @@ class CalendlyStream(RESTStream):
             params['organization'] = self.user['current_organization']
         else:
             params['user'] = self.user['uri']
+        # log the params
+        logging.info(params)
+
         return params
 
     def parse_response(self, response: requests.Response) -> Iterable[dict]:
